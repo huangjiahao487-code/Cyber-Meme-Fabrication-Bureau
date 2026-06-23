@@ -1,6 +1,6 @@
 // ========== Fabric.js 编辑器 ==========
 import { state } from './app.js';
-import { $ } from './utils.js';
+import { $, $$ } from './utils.js';
 
 let canvas = null;
 let currentTool = null;
