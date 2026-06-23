@@ -123,6 +123,42 @@
                             <input type="text" id="bottomText" class="warm-input" placeholder="输入下排文字（选填）">
                         </div>
                     </div>
+
+                    <!-- 融合方式选择 -->
+                    <div class="space-y-4">
+                        <div class="section-label">🔀 第四步：选择融合方式</div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="fusion-type-card selected" data-type="face_swap">
+                                <div class="text-2xl mb-2">🎭</div>
+                                <div class="text-sm font-bold mb-1" style="color: var(--orange);">换脸融合</div>
+                                <div class="text-xs" style="color: var(--warm-gray);">把你的脸替换到模板上</div>
+                            </div>
+                            <div class="fusion-type-card" data-type="expression_transfer">
+                                <div class="text-2xl mb-2">😄</div>
+                                <div class="text-sm font-bold mb-1" style="color: var(--coral);">表情驱动</div>
+                                <div class="text-xs" style="color: var(--warm-gray);">用你的表情驱动模板角色</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 风格选择 -->
+                    <div class="space-y-4">
+                        <div class="section-label">🎨 第五步：选择风格</div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="style-card selected" data-style="humor">
+                                <div class="text-xl mb-1">😂</div>
+                                <div class="text-xs font-bold" style="color: var(--orange);">幽默恶搞</div>
+                            </div>
+                            <div class="style-card" data-style="natural">
+                                <div class="text-xl mb-1">🤝</div>
+                                <div class="text-xs font-bold" style="color: var(--coral);">自然混搭</div>
+                            </div>
+                            <div class="style-card" data-style="cartoon">
+                                <div class="text-xl mb-1">🎪</div>
+                                <div class="text-xs font-bold" style="color: #5a9e1a;">魔性合成</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- RIGHT: Template Selection -->

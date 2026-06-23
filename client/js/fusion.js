@@ -3,20 +3,11 @@ import { state } from './app.js';
 import { $, randomId } from './utils.js';
 import { showResult } from './result.js';
 
-// 结果占位图（mock，阶段一替换为真实后端调用）
-const resultImages = [
-    'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdDRtY2ZqcXJiZmI3OGRhdnQxNDZwYmsyYm0xMWMzMXc0MXFsZWZ1cCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/TRkCyFl4eolq0/giphy.gif',
-    'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExa3hiY2JvYW54OHJvYXFwem0wZjhtYnU5cXZid3hhN2J5bzJtazhxdiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/D6InoH7TLxMsM/200.gif',
-    'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExdDRtY2ZqcXJiZmI3OGRhdnQxNDZwYmsyYm0xMWMzMXc0MXFsZWZ1cCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/VZzhwBfkShAHN2LC45/200.gif',
-    'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExa3hiY2JvYW54OHJvYXFwem0wZjhtYnU5cXZid3hhN2J5bzJtazhxdiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l41Yq2tI3wSgOVQ1q/200.gif',
-    'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExdDRtY2ZqcXJiZmI3OGRhdnQxNDZwYmsyYm0xMWMzMXc0MXFsZWZ1cCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/0Om9UjOvTmBZQH5eFe/giphy.gif'
-];
-
 export function initFusion() {
     $('#generateBtn').addEventListener('click', startGeneration);
 }
 
-function startGeneration() {
+async function startGeneration() {
     const main = $('#mainInterface');
     const loading = $('#loadingOverlay');
 
@@ -26,7 +17,7 @@ function startGeneration() {
     $('#memeId').textContent = randomId();
     $('#threadId').textContent = '#' + randomId();
 
-    // 模拟加载阶段（阶段一替换为真实后端调用）
+    // 显示加载阶段
     const stages = [
         { text: '🔍 正在提取面部特征...', sub: 'SCANNING facial_landmarks...', progress: 20, time: 600 },
         { text: '🧬 正在匹配基因序列...', sub: 'MATCHING meme_DNA_sequences...', progress: 45, time: 1200 },
@@ -44,9 +35,43 @@ function startGeneration() {
         }, stage.time);
     });
 
-    setTimeout(() => {
-        // mock：随机选一张结果图（阶段一改为调用后端）
-        state.resultImageUrl = resultImages[Math.floor(Math.random() * resultImages.length)];
-        showResult();
-    }, 3200);
+    try {
+        // 准备表单数据
+        const formData = new FormData();
+        
+        // 将用户上传的照片转换为 Blob
+        const photoResponse = await fetch(state.uploadedImage);
+        const photoBlob = await photoResponse.blob();
+        formData.append('photo', photoBlob, 'photo.jpg');
+        
+        // 添加模板 URL
+        formData.append('templateUrl', state.selectedTemplateUrl);
+        
+        // 添加融合方式和风格
+        formData.append('fusionType', state.fusionType);
+        formData.append('style', state.style);
+
+        // 调用后端 API
+        const apiResponse = await fetch('/api/fusion', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await apiResponse.json();
+
+        if (result.success) {
+            // 保存结果图片 URL
+            state.resultImageUrl = result.resultUrl;
+            showResult();
+        } else {
+            throw new Error(result.message || '生成失败');
+        }
+    } catch (error) {
+        console.error('生成失败:', error);
+        alert('生成失败: ' + error.message);
+        
+        // 恢复界面
+        loading.classList.add('hidden');
+        main.style.display = 'block';
+    }
 }

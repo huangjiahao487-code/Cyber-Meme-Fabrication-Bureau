@@ -147,3 +147,45 @@
     box-shadow: 0 6px 20px rgba(255,107,53,0.2);
     transform: translateY(-2px);
 }
+
+/* ========== FUSION TYPE CARDS ========== */
+.fusion-type-card {
+    border: 2px solid var(--light-peach);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: white;
+}
+.fusion-type-card:hover {
+    border-color: var(--orange);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255,107,53,0.15);
+}
+.fusion-type-card.selected {
+    border-color: var(--orange);
+    background: rgba(255,107,53,0.05);
+    box-shadow: 0 0 0 3px rgba(255,107,53,0.1);
+}
+
+/* ========== STYLE CARDS ========== */
+.style-card {
+    border: 2px solid var(--light-peach);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: white;
+}
+.style-card:hover {
+    border-color: var(--coral);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255,71,87,0.15);
+}
+.style-card.selected {
+    border-color: var(--coral);
+    background: rgba(255,71,87,0.05);
+    box-shadow: 0 0 0 3px rgba(255,71,87,0.1);
+}
