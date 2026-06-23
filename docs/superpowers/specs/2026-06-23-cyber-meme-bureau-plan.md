@@ -45,21 +45,118 @@
 
 ## 项目结构
 
+采用前后端分离的清晰目录结构，前端单文件 HTML 拆分为独立的 HTML/CSS/JS 模块。
+
 ```
 /workspace
-├── index.html              # 前端主页面（增强版）
-├── server.js               # 后端服务（新增）
-├── package.json            # 后端依赖（新增）
-├── public/
-│   └── templates/          # 内置模板图片（新增）
-├── uploads/                # 用户上传文件（新增，gitignore）
-└── docs/
-    └── superpowers/specs/  # 设计文档
+├── client/                     # 前端
+│   ├── index.html              # 页面结构（纯 HTML，不含样式和逻辑）
+│   ├── css/
+│   │   ├── base.css            # 基础样式：变量、reset、全局
+│   │   ├── components.css      # 组件样式：上传区、模板卡、按钮、badge
+│   │   ├── editor.css          # 编辑器样式：工具栏、画布、面板
+│   │   └── animations.css      # 动画：loading、彩纸、浮动 emoji
+│   ├── js/
+│   │   ├── app.js              # 入口：初始化、状态管理
+│   │   ├── upload.js           # 照片上传与预览
+│   │   ├── templates.js        # 模板选择与展示
+│   │   ├── fusion.js           # 融合参数选择 + 调用后端
+│   │   ├── editor.js           # Fabric.js 编辑器（文字/气泡/涂鸦/裁剪）
+│   │   ├── result.js           # 结果展示与下载
+│   │   └── utils.js            # 工具函数：压缩、DOM 辅助
+│   └── assets/
+│       └── templates/          # 内置模板图片
+│
+├── server/                     # 后端
+│   ├── src/
+│   │   ├── app.js              # Express 应用入口
+│   │   ├── routes/
+│   │   │   ├── fusion.js       # 融合接口
+│   │   │   └── templates.js    # 模板管理接口
+│   │   ├── services/
+│   │   │   ├── aiService.js    # AI API 适配层（mock + 真实）
+│   │   │   └── storage.js      # 文件存储
+│   │   ├── middleware/
+│   │   │   └── upload.js       # Multer 上传配置
+│   │   └── config.js           # 配置：端口、路径、API Key
+│   ├── uploads/                # 用户上传文件（gitignore）
+│   └── package.json
+│
+├── docs/
+│   └── superpowers/specs/      # 设计文档
+│
+├── package.json                # 根 package.json（脚本统一启动）
+└── .gitignore
 ```
+
+### 拆分原则
+
+| 关注点 | 归属 |
+|--------|------|
+| 页面结构 | `client/index.html` |
+| 视觉样式 | `client/css/*.css`（按职责拆分） |
+| 交互逻辑 | `client/js/*.js`（按功能模块拆分） |
+| 业务接口 | `server/src/routes/` |
+| AI 能力 | `server/src/services/aiService.js` |
+| 静态资源 | `client/assets/`、`server/uploads/` |
+
+### 前端模块职责
+
+| 文件 | 职责 | 依赖 |
+|------|------|------|
+| `app.js` | 初始化、全局状态、模块协调 | 所有模块 |
+| `upload.js` | 照片上传、拖拽、预览、压缩 | `utils.js` |
+| `templates.js` | 模板加载、选择、用户上传 | `utils.js` |
+| `fusion.js` | 融合方式/风格选择、调用 `/api/fusion` | `app.js` |
+| `editor.js` | Fabric.js 画布、文字/气泡/涂鸦/裁剪 | `result.js` |
+| `result.js` | 结果展示、Canvas 合成、下载 | `utils.js` |
+| `utils.js` | 图片压缩、DOM 查询、格式化等纯函数 | 无 |
+
+### 后端模块职责
+
+| 文件 | 职责 |
+|------|------|
+| `app.js` | Express 实例、中间件、路由挂载、静态托管 |
+| `routes/fusion.js` | `POST /api/fusion` 处理 |
+| `routes/templates.js` | `GET /api/templates`、`POST /api/templates/upload` |
+| `services/aiService.js` | AI API 调用（mock 优先，预留真实接口） |
+| `services/storage.js` | 文件保存、读取、URL 生成 |
+| `middleware/upload.js` | Multer 配置（限制大小、类型、存储路径） |
+| `config.js` | 端口、路径、AI API Key 等配置 |
 
 ---
 
 ## 实施阶段
+
+### 阶段零：原型拆分与项目骨架（P0 - 前置）
+
+**目标：把臃肿的单文件 index.html 拆分为可维护的模块化结构**
+
+#### 0.1 创建目录结构
+按"项目结构"章节创建 `client/` 和 `server/` 目录树。
+
+#### 0.2 拆分前端
+将现有 `index.html` 的内容拆分：
+- HTML 结构 → `client/index.html`（保留 DOM，移除 `<style>` 和 `<script>`）
+- CSS 变量、reset、body → `client/css/base.css`
+- 上传区、模板卡、按钮、badge 样式 → `client/css/components.css`
+- loading、彩纸、浮动 emoji 动画 → `client/css/animations.css`
+- 预留 `client/css/editor.css`（阶段三填充）
+- 状态 + 模板选择 + 上传逻辑 → `client/js/app.js` + `upload.js` + `templates.js`
+- 生成流程 + 结果展示 → `client/js/fusion.js` + `result.js`
+- 工具函数（如压缩）→ `client/js/utils.js`
+- 预留 `client/js/editor.js`（阶段三填充）
+
+#### 0.3 搭建后端骨架
+- `server/package.json`：express, multer, cors, axios
+- `server/src/app.js`：Express 实例，托管 `client/` 静态文件
+- 访问 `http://localhost:3001/` 能加载拆分后的前端
+
+#### 0.4 验证
+- 拆分后页面视觉、交互与原原型完全一致
+- 现有假生成流程仍能跑通（作为后续替换的基线）
+
+---
 
 ### 阶段一：后端融合服务（P0 - 核心）
 
@@ -216,20 +313,32 @@ POST /api/templates/upload   # 用户上传模板
 
 | 顺序 | 任务 | 优先级 | 依赖 |
 |------|------|--------|------|
-| 1 | 搭建后端骨架（server.js + 路由） | P0 | - |
-| 2 | 实现融合接口（mock 版本） | P0 | 1 |
-| 3 | 前端接入融合接口（替换假生成） | P0 | 2 |
-| 4 | 添加融合方式 + 风格选择器 | P0 | 3 |
-| 5 | 接入真实 AI API | P0 | 2 |
-| 6 | 集成 Fabric.js 编辑器 | P1 | 3 |
-| 7 | 实现气泡/涂鸦/裁剪工具 | P1 | 6 |
-| 8 | 扩充内置模板库 | P1 | 1 |
-| 9 | 用户上传模板功能 | P1 | 1 |
-| 10 | 错误处理 + 性能优化 | P2 | 全部 |
+| 1 | 创建 client/server 目录结构 | P0 | - |
+| 2 | 拆分 index.html → HTML/CSS/JS 模块 | P0 | 1 |
+| 3 | 搭建后端骨架，托管前端静态文件 | P0 | 1 |
+| 4 | 验证拆分后原型功能一致 | P0 | 2,3 |
+| 5 | 实现融合接口（mock 版本） | P0 | 3 |
+| 6 | 前端接入融合接口（替换假生成） | P0 | 4,5 |
+| 7 | 添加融合方式 + 风格选择器 | P0 | 6 |
+| 8 | 接入真实 AI API | P0 | 5 |
+| 9 | 集成 Fabric.js 编辑器 | P1 | 6 |
+| 10 | 实现气泡/涂鸦/裁剪工具 | P1 | 9 |
+| 11 | 扩充内置模板库 | P1 | 3 |
+| 12 | 用户上传模板功能 | P1 | 3 |
+| 13 | 错误处理 + 性能优化 | P2 | 全部 |
 
 ---
 
 ## 验证标准
+
+### 阶段零完成标准
+- [ ] `client/` 和 `server/` 目录结构创建完成
+- [ ] `index.html` 仅含 HTML 结构，无内联 `<style>`/`<script>`
+- [ ] CSS 按职责拆分到 `client/css/*.css`
+- [ ] JS 按功能拆分到 `client/js/*.js`
+- [ ] 后端可启动，`http://localhost:3001/` 加载正常
+- [ ] 拆分后视觉、交互与原原型完全一致
+- [ ] 现有假生成流程仍可跑通
 
 ### 阶段一完成标准
 - [ ] 后端可启动，`/api/fusion` 返回 mock 结果
