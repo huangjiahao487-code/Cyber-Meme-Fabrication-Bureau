@@ -1,0 +1,12 @@
+{
+  "name": "cyber-meme-bureau",
+  "version": "1.0.0",
+  "description": "赛博表情包制造局 - AI 表情包融合网页应用",
+  "private": true,
+  "scripts": {
+    "dev": "cd server && npm run dev",
+    "start": "cd server && npm start",
+    "install:server": "cd server && npm install",
+    "setup": "cd server && npm install"
+  }
+}
