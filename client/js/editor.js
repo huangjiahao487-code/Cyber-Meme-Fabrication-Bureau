@@ -7,6 +7,11 @@ let currentTool = null;
 let currentColor = '#FF6B35';
 let isDrawingMode = false;
 
+// 历史记录栈
+let historyStack = [];
+let historyIndex = -1;
+const maxHistory = 50;
+
 // 预设颜色
 const colors = [
     '#FF6B35', '#FF4757', '#FFD93D', '#A8E06C',
@@ -55,6 +60,10 @@ export function initCanvas(imageUrl) {
         canvas.dispose();
     }
     
+    // 重置历史记录
+    historyStack = [];
+    historyIndex = -1;
+    
     // 创建新画布
     canvas = new fabric.Canvas('editorCanvas', {
         width: 500,
@@ -68,10 +77,61 @@ export function initCanvas(imageUrl) {
         const scale = Math.min(500 / img.width, 500 / img.height);
         img.scale(scale);
         canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+        
+        // 保存初始状态
+        saveHistory();
     }, { crossOrigin: 'anonymous' });
+    
+    // 监听画布变化，自动保存历史
+    canvas.on('object:added', () => {
+        if (!isRestoring) saveHistory();
+    });
+    canvas.on('object:modified', () => {
+        if (!isRestoring) saveHistory();
+    });
+    canvas.on('object:removed', () => {
+        if (!isRestoring) saveHistory();
+    });
     
     // 显示编辑器
     $('#editorOverlay').classList.remove('hidden');
+}
+
+// 保存历史状态
+function saveHistory() {
+    if (!canvas) return;
+    
+    // 如果当前不在最新位置，删除后面的历史
+    if (historyIndex < historyStack.length - 1) {
+        historyStack = historyStack.slice(0, historyIndex + 1);
+    }
+    
+    // 保存当前状态
+    const json = canvas.toJSON();
+    historyStack.push(JSON.stringify(json));
+    historyIndex++;
+    
+    // 限制历史记录数量
+    if (historyStack.length > maxHistory) {
+        historyStack.shift();
+        historyIndex--;
+    }
+}
+
+// 恢复历史状态
+let isRestoring = false;
+function restoreHistory(index) {
+    if (!canvas || index < 0 || index >= historyStack.length) return;
+    
+    isRestoring = true;
+    const json = JSON.parse(historyStack[index]);
+    
+    canvas.loadFromJSON(json, () => {
+        canvas.renderAll();
+        isRestoring = false;
+    });
+    
+    historyIndex = index;
 }
 
 // 选择工具
@@ -188,7 +248,7 @@ function createBubble(style) {
         ry: style === 'rounded' ? 20 : 0
     });
     
-    const text = new fabric.Text('点击编辑', {
+    const text = new fabric.IText('点击编辑', {
         fontFamily: 'Noto Sans SC, Arial, sans-serif',
         fontSize: 24,
         fill: '#2D1B0E',
@@ -200,15 +260,25 @@ function createBubble(style) {
     const group = new fabric.Group([bubble, text], {
         left: 150,
         top: 150,
-        data: { type: 'bubble' }
+        data: { type: 'bubble' },
+        subTargetCheck: true
     });
     
     // 双击编辑文字
     group.on('mousedblclick', () => {
-        text.set('editable', true);
+        // 解组以编辑文字
+        group.set({ selectable: false });
+        text.set({ selectable: true, editable: true });
         canvas.setActiveObject(text);
         text.enterEditing();
         text.selectAll();
+        
+        // 编辑完成后重新组合
+        text.on('editing:exited', () => {
+            text.set({ selectable: false, editable: false });
+            group.set({ selectable: true });
+            canvas.renderAll();
+        });
     });
     
     return group;
@@ -217,6 +287,12 @@ function createBubble(style) {
 // 裁剪模式
 function startCropMode() {
     if (!canvas) return;
+    
+    // 先移除已存在的裁剪框
+    const existingCropRect = canvas.getObjects().find(obj => obj.data?.type === 'crop');
+    if (existingCropRect) {
+        canvas.remove(existingCropRect);
+    }
     
     // 创建裁剪框
     const rect = new fabric.Rect({
@@ -239,9 +315,15 @@ function startCropMode() {
     canvas.setActiveObject(rect);
     canvas.renderAll();
     
-    // 应用裁剪
-    $('#editorApplyCrop')?.classList.remove('hidden');
-    $('#editorApplyCrop')?.addEventListener('click', applyCrop);
+    // 显示应用裁剪按钮（只绑定一次事件）
+    const applyCropBtn = $('#editorApplyCrop');
+    if (applyCropBtn) {
+        applyCropBtn.classList.remove('hidden');
+        // 移除旧事件监听器，避免重复绑定
+        const newBtn = applyCropBtn.cloneNode(true);
+        applyCropBtn.parentNode.replaceChild(newBtn, applyCropBtn);
+        newBtn.addEventListener('click', applyCrop);
+    }
 }
 
 // 应用裁剪
@@ -284,18 +366,14 @@ function applyCrop() {
 
 // 撤销
 function undo() {
-    if (!canvas) return;
-    const objects = canvas.getObjects();
-    if (objects.length > 0) {
-        canvas.remove(objects[objects.length - 1]);
-        canvas.renderAll();
-    }
+    if (!canvas || historyIndex <= 0) return;
+    restoreHistory(historyIndex - 1);
 }
 
-// 重做（简化版）
+// 重做
 function redo() {
-    // Fabric.js 不内置重做，这里留空
-    console.log('重做功能待实现');
+    if (!canvas || historyIndex >= historyStack.length - 1) return;
+    restoreHistory(historyIndex + 1);
 }
 
 // 下载

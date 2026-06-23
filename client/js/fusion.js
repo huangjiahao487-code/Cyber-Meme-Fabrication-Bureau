@@ -44,8 +44,14 @@ async function startGeneration() {
         const photoBlob = await photoResponse.blob();
         formData.append('photo', photoBlob, 'photo.jpg');
         
-        // 添加模板 URL
-        formData.append('templateUrl', state.selectedTemplateUrl);
+        // 处理模板：如果是 dataURL（用户上传），转为文件上传；否则传 URL
+        if (state.selectedTemplateUrl && state.selectedTemplateUrl.startsWith('data:')) {
+            const templateResponse = await fetch(state.selectedTemplateUrl);
+            const templateBlob = await templateResponse.blob();
+            formData.append('templateFile', templateBlob, 'template.jpg');
+        } else {
+            formData.append('templateUrl', state.selectedTemplateUrl);
+        }
         
         // 添加融合方式和风格
         formData.append('fusionType', state.fusionType);
@@ -68,7 +74,20 @@ async function startGeneration() {
         }
     } catch (error) {
         console.error('生成失败:', error);
-        alert('生成失败: ' + error.message);
+        
+        // 友好的错误提示
+        let errorMsg = '生成失败，请重试';
+        if (error.message?.includes('timeout')) {
+            errorMsg = 'AI 服务响应超时，请稍后重试';
+        } else if (error.message?.includes('no face')) {
+            errorMsg = '未在照片中发现人脸，请上传清晰的人脸照片';
+        } else if (error.message?.includes('network')) {
+            errorMsg = '网络连接失败，请检查网络后重试';
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+        
+        alert(errorMsg);
         
         // 恢复界面
         loading.classList.add('hidden');
