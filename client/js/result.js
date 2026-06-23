@@ -2,9 +2,11 @@
 import { state } from './app.js';
 import { $ } from './utils.js';
 import { launchConfetti } from './effects.js';
+import { initCanvas } from './editor.js';
 
 export function initResult() {
     $('#saveBtn').addEventListener('click', saveResult);
+    $('#editBtn').addEventListener('click', enterEditor);
     $('#redoBtn').addEventListener('click', redo);
 
     // ESC 返回重做
@@ -33,6 +35,24 @@ export function showResult() {
     };
 
     launchConfetti();
+}
+
+function enterEditor() {
+    // 隐藏结果页，显示编辑器
+    $('#resultOverlay').classList.add('hidden');
+    
+    // 初始化画布
+    initCanvas(state.resultImageUrl);
+    
+    // 预填充文字
+    const topText = $('#topText').value;
+    const bottomText = $('#bottomText').value;
+    if (topText) {
+        $('#editorTopText').value = topText;
+    }
+    if (bottomText) {
+        $('#editorBottomText').value = bottomText;
+    }
 }
 
 function saveResult() {

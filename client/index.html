@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/editor.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 </head>
 <body>
 
@@ -176,6 +177,22 @@
                                 <span class="text-sm font-bold" style="color: var(--warm-gray);">🧠 膨胀大脑</span>
                             </div>
                         </div>
+                        <!-- Upload Custom Template -->
+                        <div class="template-card upload-template-card" id="uploadTemplateCard">
+                            <div class="template-img-wrap flex items-center justify-center" style="background: var(--soft-orange);">
+                                <div class="text-center">
+                                    <div style="font-size: 48px; margin-bottom: 8px;">📤</div>
+                                    <div class="text-sm font-bold" style="color: var(--orange);">上传我的表情包</div>
+                                </div>
+                            </div>
+                            <input type="file" id="templateFileInput" accept="image/*" class="hidden">
+                        </div>
+                    </div>
+
+                    <!-- User Uploaded Templates (hidden initially) -->
+                    <div id="userTemplatesContainer" class="hidden">
+                        <div class="section-label mb-3">📦 我的表情包</div>
+                        <div class="grid grid-cols-2 gap-4" id="userTemplateGrid"></div>
                     </div>
 
                     <!-- Fun Fact Box -->
@@ -226,6 +243,123 @@
         </div>
     </div>
 
+    <!-- Editor Overlay -->
+    <div id="editorOverlay" class="editor-overlay hidden">
+        <div class="editor-container">
+            <!-- Header -->
+            <div class="editor-header">
+                <div class="editor-title">
+                    <span class="text-2xl">🎨</span>
+                    表情包编辑器
+                </div>
+                <div class="editor-actions">
+                    <button id="editorUndo" class="tool-btn">
+                        <span>↶</span> 撤销
+                    </button>
+                    <button id="editorRedo" class="tool-btn">
+                        <span>↷</span> 重做
+                    </button>
+                    <button id="editorBack" class="tool-btn">
+                        <span>←</span> 返回
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main -->
+            <div class="editor-main">
+                <!-- Tools Panel -->
+                <div class="editor-tools">
+                    <!-- Text Tool -->
+                    <div class="tool-section">
+                        <div class="tool-section-title">
+                            <span>✍️</span> 添加文字
+                        </div>
+                        <div class="text-input-group">
+                            <label class="text-input-label">顶部文字</label>
+                            <input type="text" id="editorTopText" class="text-input" placeholder="输入顶部文字">
+                        </div>
+                        <div class="text-input-group">
+                            <label class="text-input-label">底部文字</label>
+                            <input type="text" id="editorBottomText" class="text-input" placeholder="输入底部文字">
+                        </div>
+                    </div>
+
+                    <!-- Bubble Tool -->
+                    <div class="tool-section">
+                        <div class="tool-section-title">
+                            <span>💬</span> 添加气泡
+                        </div>
+                        <select id="editorBubbleStyle" class="tool-select">
+                            <option value="">选择气泡样式</option>
+                            <option value="rounded">圆角气泡</option>
+                            <option value="pointer">尖角气泡</option>
+                            <option value="square">方形气泡</option>
+                        </select>
+                    </div>
+
+                    <!-- Doodle Tool -->
+                    <div class="tool-section">
+                        <div class="tool-section-title">
+                            <span>🖌️</span> 涂鸦工具
+                        </div>
+                        <button class="tool-button" data-tool="doodle">
+                            <span>✏️</span> 自由涂鸦
+                        </button>
+                    </div>
+
+                    <!-- Crop Tool -->
+                    <div class="tool-section">
+                        <div class="tool-section-title">
+                            <span>✂️</span> 裁剪工具
+                        </div>
+                        <button class="tool-button" data-tool="crop">
+                            <span>📐</span> 裁剪画面
+                        </button>
+                        <button id="editorApplyCrop" class="tool-btn hidden" style="margin-top: 8px;">
+                            <span>✓</span> 应用裁剪
+                        </button>
+                    </div>
+
+                    <!-- Color Picker -->
+                    <div class="tool-section">
+                        <div class="tool-section-title">
+                            <span>🎨</span> 颜色选择
+                        </div>
+                        <div class="color-picker-group">
+                            <div class="color-swatch active" data-color="#FF6B35" style="background: #FF6B35;"></div>
+                            <div class="color-swatch" data-color="#FF4757" style="background: #FF4757;"></div>
+                            <div class="color-swatch" data-color="#FFD93D" style="background: #FFD93D;"></div>
+                            <div class="color-swatch" data-color="#A8E06C" style="background: #A8E06C;"></div>
+                            <div class="color-swatch" data-color="#48DBFB" style="background: #48DBFB;"></div>
+                            <div class="color-swatch" data-color="#FF9FF3" style="background: #FF9FF3;"></div>
+                            <div class="color-swatch" data-color="#2D1B0E" style="background: #2D1B0E;"></div>
+                            <div class="color-swatch" data-color="#FFFFFF" style="background: #FFFFFF;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canvas Area -->
+                <div class="editor-canvas-area">
+                    <div class="canvas-wrapper">
+                        <canvas id="editorCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="editor-footer">
+                <div class="editor-hint">
+                    💡 提示：点击对象可拖动调整位置，双击气泡可编辑文字
+                </div>
+                <div class="editor-footer-actions">
+                    <button id="editorDownload" class="tool-btn primary">
+                        <span>💾</span> 下载表情包
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Result Overlay -->
     <div id="resultOverlay" class="result-container hidden">
         <div class="result-card max-w-lg w-full mx-6">
@@ -271,6 +405,7 @@
                 <!-- Action Buttons -->
                 <div class="p-5 flex gap-3" style="border-top: 2px solid var(--light-peach);">
                     <button class="save-btn flex-1" id="saveBtn">💾 保存到本地</button>
+                    <button class="edit-btn flex-1" id="editBtn">🎨 进入编辑器</button>
                     <button class="redo-btn flex-1" id="redoBtn">🔄 返回重做</button>
                 </div>
             </div>
