@@ -103,7 +103,8 @@ async function doubaoFuse(photoPath, templatePath, fusionType, style) {
         prompt,
         // 多图输入：第一张是用户照片（提供人脸），第二张是模板（提供构图/背景）
         image: [photoImage, templateImage],
-        size: '1024x1024',
+        // Seedream 5.0 要求最小 3686400 像素，2048x2048=4194304 满足要求
+        size: '2048x2048',
         // 不加水印，表情包画面更干净
         watermark: false,
         // 返回 URL 形式，避免大 base64 占带宽
