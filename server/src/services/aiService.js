@@ -1,5 +1,5 @@
 // ========== AI 融合服务 ==========
-// 支持 mock（本地模拟）、aliyun（阿里云人脸融合）、dashscope（通义万相图像生成，推荐）
+// 支持 mock、aliyun（阿里云人脸融合）、dashscope（通义万相）、doubao（豆包 Seedream，推荐）
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
@@ -42,6 +42,16 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
     if (config.ai.provider === 'mock') {
         return mockFuse(photoPath, templatePath, fusionType, style);
     }
+    if (config.ai.provider === 'doubao') {
+        try {
+            return await doubaoFuse(photoPath, templatePath, fusionType, style);
+        } catch (err) {
+            const friendly = mapDoubaoError(err);
+            const e = new Error(friendly);
+            e.original = err;
+            throw e;
+        }
+    }
     if (config.ai.provider === 'dashscope') {
         try {
             return await dashscopeFuse(photoPath, templatePath, fusionType, style);
@@ -63,6 +73,106 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
         }
     }
     throw new Error(`不支持的 AI provider: ${config.ai.provider}`);
+}
+
+// ========== 豆包 Seedream 图像生成（火山引擎 Ark）==========
+// OpenAI 兼容格式，支持多图 Base64 输入，一次请求出图
+// 换脸/换装场景效果较好，接入简单
+
+/**
+ * 豆包 Seedream 图像生成完整流程
+ */
+async function doubaoFuse(photoPath, templatePath, fusionType, style) {
+    const { apiKey, model, endpoint } = config.ai.doubao;
+    if (!apiKey) {
+        throw new Error('豆包 API Key 未配置，请在 .env 中设置 DOUBAO_API_KEY');
+    }
+
+    console.log(`[doubao] 开始生成: photo=${photoPath}, template=${templatePath}, type=${fusionType}, style=${style}`);
+
+    // 1. 准备图片内容（本地文件转 data URI，URL 直接使用）
+    const photoImage = await fileToImageContent(photoPath);
+    const templateImage = await fileToImageContent(templatePath);
+
+    // 2. 构造提示词
+    const prompt = buildPrompt(fusionType, style);
+
+    // 3. 调用豆包图像生成 API（OpenAI 兼容格式，多图输入用数组）
+    const body = {
+        model,
+        prompt,
+        // 多图输入：第一张是用户照片（提供人脸），第二张是模板（提供构图/背景）
+        image: [photoImage, templateImage],
+        size: '1024x1024',
+        // 不加水印，表情包画面更干净
+        watermark: false,
+        // 返回 URL 形式，避免大 base64 占带宽
+        response_format: 'url',
+    };
+
+    const response = await axios.post(endpoint, body, {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        // 图像生成耗时较长，给 2 分钟超时
+        timeout: 120000,
+    });
+
+    // 响应格式：data.data[0].url
+    const resultUrl = response.data?.data?.[0]?.url;
+    if (!resultUrl) {
+        const errMsg = response.data?.error?.message || response.data?.message;
+        throw new Error(errMsg || 'AI 生成返回空结果');
+    }
+
+    console.log(`[doubao] 生成完成: resultUrl=${resultUrl}`);
+    return resultUrl;
+}
+
+/**
+ * 将豆包 API 错误映射为友好的中文提示
+ */
+function mapDoubaoError(err) {
+    const msg = err.message || '';
+    const status = err.response?.status;
+    const code = err.response?.data?.error?.code || '';
+    const apiMsg = err.response?.data?.error?.message || err.response?.data?.message || '';
+
+    // API Key 问题
+    if (msg.includes('未配置') || status === 401 || code.includes('InvalidApiKey') || code.includes('Unauthorized') || code.includes('Authentication')) {
+        return '豆包 API Key 无效或未配置，请检查 .env 中的 DOUBAO_API_KEY';
+    }
+    // 未开通服务 / 无权限
+    if (status === 403 || code.includes('Forbidden') || code.includes('AccessDenied') || code.includes('Permission') || code.includes('NoAccess')) {
+        return '豆包 Seedream 服务未开通或无权限，请先在火山方舟控制台开通 doubao-seedream 模型';
+    }
+    // 限流
+    if (status === 429 || code.includes('Throttling') || code.includes('RateLimit') || code.includes('TooManyRequests')) {
+        return 'AI 服务调用过于频繁，请稍后重试';
+    }
+    // 超时
+    if (msg.includes('timeout') || code.includes('Timeout') || msg.includes('ETIMEDOUT')) {
+        return 'AI 生成超时，请稍后重试';
+    }
+    // 网络错误
+    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET')) {
+        return '网络连接失败，请检查网络后重试';
+    }
+    // 图片格式问题
+    if (code.includes('InvalidImage') || code.includes('Image') || apiMsg.includes('image') || apiMsg.includes('图片')) {
+        return '图片格式或尺寸不符合要求，请更换图片重试';
+    }
+    // 参数错误
+    if (status === 400 || code.includes('InvalidParameter') || code.includes('BadRequest')) {
+        return apiMsg || '请求参数有误，请检查后重试';
+    }
+    // 余额不足
+    if (status === 402 || code.includes('InsufficientBalance') || code.includes('Payment')) {
+        return '账户余额不足，请前往火山引擎控制台充值';
+    }
+
+    return apiMsg || msg || 'AI 生成失败，请重试';
 }
 
 // ========== 通义万相图像生成（DashScope）==========
