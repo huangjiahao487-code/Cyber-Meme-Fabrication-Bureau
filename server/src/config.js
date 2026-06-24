@@ -20,14 +20,22 @@ export default {
     },
     // AI API 配置
     ai: {
-        // mock: 本地模拟 | aliyun: 阿里云人脸融合
+        // mock: 本地模拟 | aliyun: 阿里云人脸融合 | dashscope: 通义万相图像生成（推荐）
         provider: process.env.AI_PROVIDER || 'mock',
-        // 阿里云视觉智能开放平台配置
+        // 阿里云视觉智能开放平台配置（provider=aliyun 时使用）
         aliyun: {
             accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
             accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
             // 人脸人体服务 endpoint（上海地域）
             endpoint: process.env.ALIYUN_ENDPOINT || 'facebody.cn-shanghai.aliyuncs.com',
+        },
+        // 通义万相（百炼 DashScope）配置（provider=dashscope 时使用）
+        // 获取 API Key：https://bailian.console.aliyun.com/?tab=model#/api-key
+        dashscope: {
+            apiKey: process.env.DASHSCOPE_API_KEY || '',
+            // 万相图像生成与编辑模型，支持图文混排和图像编辑
+            model: process.env.DASHSCOPE_MODEL || 'wan2.6-image',
+            endpoint: process.env.DASHSCOPE_ENDPOINT || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
         },
     },
 };

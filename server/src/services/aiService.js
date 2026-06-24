@@ -1,7 +1,9 @@
 // ========== AI 融合服务 ==========
-// 支持 mock（本地模拟）和 aliyun（阿里云人脸融合）
+// 支持 mock（本地模拟）、aliyun（阿里云人脸融合）、dashscope（通义万相图像生成，推荐）
 import { createRequire } from 'module';
 import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
 import config from '../config.js';
 
 const require = createRequire(import.meta.url);
@@ -40,6 +42,16 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
     if (config.ai.provider === 'mock') {
         return mockFuse(photoPath, templatePath, fusionType, style);
     }
+    if (config.ai.provider === 'dashscope') {
+        try {
+            return await dashscopeFuse(photoPath, templatePath, fusionType, style);
+        } catch (err) {
+            const friendly = mapDashscopeError(err);
+            const e = new Error(friendly);
+            e.original = err;
+            throw e;
+        }
+    }
     if (config.ai.provider === 'aliyun') {
         try {
             return await aliyunFuse(photoPath, templatePath, fusionType, style);
@@ -51,6 +63,147 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
         }
     }
     throw new Error(`不支持的 AI provider: ${config.ai.provider}`);
+}
+
+// ========== 通义万相图像生成（DashScope）==========
+// 流程：本地图片转 Base64 → 一次 HTTP 请求 → 返回结果图 URL
+// 无需 OSS 上传、无需模板注册，比阿里云人脸融合简单得多
+
+/**
+ * 通义万相图像生成完整流程
+ */
+async function dashscopeFuse(photoPath, templatePath, fusionType, style) {
+    const { apiKey, model, endpoint } = config.ai.dashscope;
+    if (!apiKey) {
+        throw new Error('DashScope API Key 未配置，请在 .env 中设置 DASHSCOPE_API_KEY');
+    }
+
+    console.log(`[dashscope] 开始生成: photo=${photoPath}, template=${templatePath}, type=${fusionType}, style=${style}`);
+
+    // 1. 准备图片内容（本地文件转 data URI，URL 直接使用）
+    const photoImage = await fileToImageContent(photoPath);
+    const templateImage = await fileToImageContent(templatePath);
+
+    // 2. 构造提示词
+    const prompt = buildPrompt(fusionType, style);
+
+    // 3. 调用万相图像生成 API（同步调用，一次请求拿结果）
+    const body = {
+        model,
+        input: {
+            messages: [{
+                role: 'user',
+                content: [
+                    { image: photoImage },
+                    { image: templateImage },
+                    { text: prompt },
+                ],
+            }],
+        },
+        parameters: {
+            size: '1024*1024',
+        },
+    };
+
+    const response = await axios.post(endpoint, body, {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        // 图像生成耗时较长，给 2 分钟超时
+        timeout: 120000,
+    });
+
+    // 响应格式：data.output.choices[0].message.content[0].image
+    const resultUrl = response.data?.output?.choices?.[0]?.message?.content?.[0]?.image;
+    if (!resultUrl) {
+        const errMsg = response.data?.message || response.data?.output?.message;
+        throw new Error(errMsg || 'AI 生成返回空结果');
+    }
+
+    console.log(`[dashscope] 生成完成: resultUrl=${resultUrl}`);
+    return resultUrl;
+}
+
+/**
+ * 将本地文件路径或 URL 转为万相 API 可接受的图片内容
+ * - URL：直接返回
+ * - 本地文件：读取并转为 data URI（data:image/xxx;base64,...）
+ */
+async function fileToImageContent(filePath) {
+    if (!filePath) {
+        throw new Error('图片路径为空');
+    }
+    // 公网 URL 直接使用
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        return filePath;
+    }
+    // 本地文件转 data URI
+    if (!fs.existsSync(filePath)) {
+        throw new Error(`图片文件不存在: ${filePath}`);
+    }
+    const buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const mime = ext === 'jpg' ? 'jpeg' : (ext || 'jpeg');
+    return `data:image/${mime};base64,${buffer.toString('base64')}`;
+}
+
+/**
+ * 根据融合方式和风格构造提示词
+ */
+function buildPrompt(fusionType, style) {
+    const styleDesc = {
+        humor: '搞笑夸张的表情包风格，画面生动有趣',
+        natural: '自然真实的风格，光影和肤色协调',
+        cartoon: '卡通动漫风格，线条明快色彩鲜艳',
+    }[style] || '搞笑表情包风格';
+
+    if (fusionType === 'expression_transfer') {
+        return `参考图一中人物的表情和神态，将其应用到图二中的人物脸上，保持图二的背景、构图和服装不变，生成一张${styleDesc}的图片`;
+    }
+    // face_swap：换脸
+    return `将图一中人物的脸替换到图二中的人物脸上，保持图二的整体构图、背景和服装不变，要求人脸自然融合、边缘平滑，生成一张${styleDesc}的图片`;
+}
+
+/**
+ * 将 DashScope API 错误映射为友好的中文提示
+ */
+function mapDashscopeError(err) {
+    const msg = err.message || '';
+    const status = err.response?.status;
+    const code = err.response?.data?.code || '';
+    const apiMsg = err.response?.data?.message || '';
+
+    // API Key 问题
+    if (msg.includes('未配置') || status === 401 || code.includes('Unauthorized') || code.includes('InvalidApiKey') || code.includes('AccessKey')) {
+        return 'DashScope API Key 无效或未配置，请检查 .env 中的 DASHSCOPE_API_KEY';
+    }
+    // 未开通服务 / 无权限
+    if (status === 403 || code.includes('Forbidden') || code.includes('AccessDenied') || code.includes('Permission')) {
+        return '通义万相服务未开通或无权限，请先在百炼平台开通 wan2.6-image 模型';
+    }
+    // 限流
+    if (status === 429 || code.includes('Throttling') || code.includes('RateLimit')) {
+        return 'AI 服务调用过于频繁，请稍后重试';
+    }
+    // 超时
+    if (msg.includes('timeout') || code.includes('Timeout') || msg.includes('ETIMEDOUT')) {
+        return 'AI 生成超时，请稍后重试';
+    }
+    // 网络错误
+    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET')) {
+        return '网络连接失败，请检查网络后重试';
+    }
+    // 图片格式问题
+    if (code.includes('InvalidImage') || code.includes('Image') || apiMsg.includes('image')) {
+        return '图片格式或尺寸不符合要求，请更换图片重试';
+    }
+    // 参数错误
+    if (status === 400 || code.includes('InvalidParameter') || code.includes('BadRequest')) {
+        return apiMsg || '请求参数有误，请检查后重试';
+    }
+
+    return apiMsg || msg || 'AI 生成失败，请重试';
 }
 
 // ========== 阿里云人脸融合 ==========
