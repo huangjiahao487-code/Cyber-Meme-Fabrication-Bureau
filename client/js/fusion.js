@@ -1,4 +1,7 @@
-// ========== 融合生成流程 ==========
+// ========== 融合生成流程（异步轮询模式）==========
+// 因 AI 生成耗时 30-40 秒，超过代理超时，改为：
+//   1. POST /api/fusion 提交任务，立即拿到 taskId
+//   2. 每 2 秒轮询 /api/fusion/status/:taskId 直到完成
 import { state } from './app.js';
 import { $, randomId } from './utils.js';
 import { showResult } from './result.js';
@@ -17,14 +20,7 @@ async function startGeneration() {
     $('#memeId').textContent = randomId();
     $('#threadId').textContent = '#' + randomId();
 
-    // 启动持续滚动的进度动画（AI 生成耗时 10-40 秒，不能用固定时间）
-    let progress = 5;
-    const progressTimer = setInterval(() => {
-        // 缓慢逼近 90%，永远不到 100%，等真实结果回来再填满
-        progress = progress + (90 - progress) * 0.08;
-        $('#progressFill').style.width = progress + '%';
-    }, 400);
-
+    // 进度条由轮询结果驱动，这里先启动文案轮播
     const stageTexts = [
         '🔍 正在提取面部特征...', '🧬 正在匹配基因序列...',
         '✂️ 正在进行基因缝合...', '🎨 正在注入灵魂...',
@@ -33,20 +29,19 @@ async function startGeneration() {
     let stageIdx = 0;
     const stageTimer = setInterval(() => {
         $('#loadingText').textContent = stageTexts[stageIdx % stageTexts.length];
-        $('#loadingSubtext').textContent = 'PROCESSING... ' + Math.floor(progress) + '%';
         $('#threadId').textContent = '#' + randomId();
         stageIdx++;
-    }, 2000);
+    }, 2500);
 
     try {
         // 准备表单数据
         const formData = new FormData();
-        
+
         // 将用户上传的照片转换为 Blob
         const photoResponse = await fetch(state.uploadedImage);
         const photoBlob = await photoResponse.blob();
         formData.append('photo', photoBlob, 'photo.jpg');
-        
+
         // 处理模板：如果是 dataURL（用户上传），转为文件上传；否则传 URL
         if (state.selectedTemplateUrl && state.selectedTemplateUrl.startsWith('data:')) {
             const templateResponse = await fetch(state.selectedTemplateUrl);
@@ -55,51 +50,46 @@ async function startGeneration() {
         } else {
             formData.append('templateUrl', state.selectedTemplateUrl);
         }
-        
+
         // 添加融合方式和风格
         formData.append('fusionType', state.fusionType);
         formData.append('style', state.style);
 
-        // 调用后端 API（带 3 分钟超时，AI 生成耗时较长）
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000);
-        const apiResponse = await fetch('/api/fusion', {
+        // 1. 提交任务（快速返回 taskId）
+        const submitResponse = await fetch('/api/fusion', {
             method: 'POST',
             body: formData,
-            signal: controller.signal,
         });
-        clearTimeout(timeoutId);
-
-        // 防御性解析：先拿文本，再尝试 JSON 解析，避免 SyntaxError
-        const responseText = await apiResponse.text();
-        let result;
+        const submitText = await submitResponse.text();
+        let submitResult;
         try {
-            result = JSON.parse(responseText);
+            submitResult = JSON.parse(submitText);
         } catch {
             throw new Error('服务器返回了非预期的内容，请重试');
         }
 
-        if (apiResponse.ok && result.success) {
-            // 保存结果图片 URL
-            state.resultImageUrl = result.resultUrl;
-            // 进度填满后展示结果
-            clearInterval(progressTimer);
-            clearInterval(stageTimer);
-            $('#progressFill').style.width = '100%';
-            $('#loadingText').textContent = '✨ 生成完成！';
-            setTimeout(() => showResult(), 400);
-        } else {
-            throw new Error(result.message || `生成失败（HTTP ${apiResponse.status}）`);
+        if (!submitResponse.ok || !submitResult.success) {
+            throw new Error(submitResult.message || `提交任务失败（HTTP ${submitResponse.status}）`);
         }
+
+        const { taskId } = submitResult;
+
+        // 2. 轮询任务状态，直到完成或失败
+        const resultUrl = await pollTaskStatus(taskId, stageTimer);
+
+        // 成功：展示结果
+        clearInterval(stageTimer);
+        $('#progressFill').style.width = '100%';
+        $('#loadingText').textContent = '✨ 生成完成！';
+        state.resultImageUrl = resultUrl;
+        setTimeout(() => showResult(), 500);
     } catch (error) {
-        clearInterval(progressTimer);
         clearInterval(stageTimer);
         console.error('生成失败:', error);
-        
-        // 友好的错误提示
+
         let errorMsg = '生成失败，请重试';
         if (error.name === 'AbortError') {
-            errorMsg = 'AI 生成超时（超过 3 分钟），请稍后重试';
+            errorMsg = 'AI 生成超时，请稍后重试';
         } else if (error.message?.includes('timeout')) {
             errorMsg = 'AI 服务响应超时，请稍后重试';
         } else if (error.message?.includes('no face') || error.message?.includes('未在照片')) {
@@ -111,12 +101,48 @@ async function startGeneration() {
         } else if (error.message) {
             errorMsg = error.message;
         }
-        
+
         alert(errorMsg);
-        
+
         // 恢复界面
         loading.classList.add('hidden');
         main.style.display = 'block';
         $('#progressFill').style.width = '0%';
     }
+}
+
+// 轮询任务状态，返回结果图 URL
+async function pollTaskStatus(taskId, stageTimer) {
+    const maxAttempts = 90; // 最多轮询 90 次（约 3 分钟）
+    const interval = 2000;  // 每 2 秒一次
+
+    for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, interval));
+
+        let data;
+        try {
+            const resp = await fetch(`/api/fusion/status/${taskId}`);
+            const text = await resp.text();
+            data = JSON.parse(text);
+        } catch {
+            // 单次轮询失败不中断，继续重试
+            continue;
+        }
+
+        // 更新进度条（以后端返回的进度为准）
+        if (typeof data.progress === 'number') {
+            $('#progressFill').style.width = data.progress + '%';
+            $('#loadingSubtext').textContent = 'PROCESSING... ' + data.progress + '%';
+        }
+
+        if (data.status === 'success') {
+            return data.resultUrl;
+        }
+        if (data.status === 'failed') {
+            throw new Error(data.message || '融合失败，请重试');
+        }
+        // status === 'processing'，继续轮询
+    }
+
+    throw new Error('AI 生成超时，请稍后重试');
 }
