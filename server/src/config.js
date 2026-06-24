@@ -20,7 +20,7 @@ export default {
     },
     // AI API 配置
     ai: {
-        // mock: 本地模拟 | aliyun: 阿里云人脸融合 | dashscope: 通义万相 | doubao: 豆包 Seedream（推荐）
+        // mock | aliyun | dashscope | doubao | siliconflow
         provider: process.env.AI_PROVIDER || 'mock',
         // 阿里云视觉智能开放平台配置（provider=aliyun 时使用）
         aliyun: {
@@ -45,6 +45,15 @@ export default {
             // 豆包图像生成模型，支持多图输入（换脸/换装场景效果好）
             model: process.env.DOUBAO_MODEL || 'doubao-seedream-4-0-250828',
             endpoint: process.env.DOUBAO_ENDPOINT || 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+        },
+        // 硅基流动 SiliconFlow 配置（provider=siliconflow 时使用）
+        // 获取 API Key：https://cloud.siliconflow.cn/  注册送 2000 万 Token 免费额度
+        // 支持图生图（Kolors 模型），以用户照片为参考图生成搞怪变体
+        siliconflow: {
+            apiKey: process.env.SILICONFLOW_API_KEY || '',
+            // Kolors 模型支持图生图 + negative_prompt + batch_size
+            model: process.env.SILICONFLOW_MODEL || 'Kwai-Kolors/Kolors',
+            endpoint: process.env.SILICONFLOW_ENDPOINT || 'https://api.siliconflow.cn/v1/images/generations',
         },
     },
 };

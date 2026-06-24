@@ -52,6 +52,16 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
             throw e;
         }
     }
+    if (config.ai.provider === 'siliconflow') {
+        try {
+            return await siliconflowFuse(photoPath, templatePath, fusionType, style);
+        } catch (err) {
+            const friendly = mapSiliconflowError(err);
+            const e = new Error(friendly);
+            e.original = err;
+            throw e;
+        }
+    }
     if (config.ai.provider === 'dashscope') {
         try {
             return await dashscopeFuse(photoPath, templatePath, fusionType, style);
@@ -129,6 +139,138 @@ async function doubaoFuse(photoPath, templatePath, fusionType, style) {
 
     console.log(`[doubao] 生成完成: resultUrl=${resultUrl}`);
     return resultUrl;
+}
+
+// ========== 硅基流动 SiliconFlow 图生图（Kolors 模型）==========
+// 以用户照片为参考图，根据 prompt 生成搞怪变体
+// 免费额度大（注册送 2000 万 Token），支持 base64 图生图
+
+/**
+ * SiliconFlow Kolors 图生图完整流程
+ * 策略：用户照片作为参考图（保持人脸相似度），prompt 描述要生成的搞怪效果
+ */
+async function siliconflowFuse(photoPath, templatePath, fusionType, style) {
+    const { apiKey, model, endpoint } = config.ai.siliconflow;
+    if (!apiKey) {
+        throw new Error('SiliconFlow API Key 未配置，请在 .env 中设置 SILICONFLOW_API_KEY');
+    }
+
+    console.log(`[siliconflow] 开始生成: photo=${photoPath}, template=${templatePath}, type=${fusionType}, style=${style}`);
+
+    // 1. 用户照片转 base64 data URI（作为图生图的参考图）
+    const photoDataUri = await fileToImageContent(photoPath);
+
+    // 2. 构造 prompt：以用户照片为基础，描述要生成的搞怪效果
+    const prompt = buildSiliconflowPrompt(templatePath, fusionType, style);
+
+    // 3. 调用 SiliconFlow 图生图 API
+    const body = {
+        model,
+        prompt,
+        // 图生图：传入参考图（base64 data URI）
+        image: photoDataUri,
+        // 分辨率
+        image_size: '1024x1024',
+        // 推理步数（20-30 平衡质量和速度）
+        num_inference_steps: 25,
+        // 文本匹配度
+        guidance_scale: 7.5,
+        // 负向提示词：排除低质量元素
+        negative_prompt: 'blurry, low quality, distorted face, deformed, watermark, text, multiple faces, split screen, collage',
+        // 固定 batch_size=1
+        batch_size: 1,
+    };
+
+    const response = await axios.post(endpoint, body, {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        timeout: 120000,
+    });
+
+    // 响应格式：data.images[0].url
+    const resultUrl = response.data?.images?.[0]?.url;
+    if (!resultUrl) {
+        const errMsg = response.data?.error?.message || response.data?.message;
+        throw new Error(errMsg || 'AI 生成返回空结果');
+    }
+
+    console.log(`[siliconflow] 生成完成: resultUrl=${resultUrl}`);
+    return resultUrl;
+}
+
+/**
+ * 构造 SiliconFlow 图生图的 prompt
+ * 以用户照片为参考，描述要生成的搞怪表情包效果
+ */
+function buildSiliconflowPrompt(templatePath, fusionType, style) {
+    const styleDesc = {
+        humor: '搞笑夸张的表情包风格，画面生动有趣，色彩鲜艳',
+        natural: '自然写实的摄影风格，光影协调',
+        cartoon: '卡通动漫风格，线条明快',
+    }[style] || '搞笑表情包风格';
+
+    // 根据模板路径推断场景描述
+    const sceneDesc = inferSceneFromTemplate(templatePath);
+
+    if (fusionType === 'expression_transfer') {
+        return `基于参考图中人物的面部特征，生成一张${styleDesc}的图片：${sceneDesc}。保持参考图中人物的脸型、五官特征和发型，但表情变为夸张搞笑的样子。画面只输出一张完整的图片。`;
+    }
+    // face_swap
+    return `基于参考图中人物的面部特征和长相，生成一张${styleDesc}的图片：${sceneDesc}。保持参考图中人物的脸型、五官特征，将其自然地融入新场景中。画面只输出一张完整的图片，不要分屏或拼接。`;
+}
+
+/**
+ * 根据模板路径推断场景描述
+ */
+function inferSceneFromTemplate(templatePath) {
+    if (!templatePath) return '一个搞笑的场景';
+    const basename = path.basename(templatePath).toLowerCase();
+    // 根据文件名关键词推断场景
+    if (basename.includes('cat') || basename.includes('mao')) return '人物变成一只可爱的猫咪';
+    if (basename.includes('dog') || basename.includes('gou')) return '人物变成一只搞笑的狗狗';
+    if (basename.includes('baby') || basename.includes('ying')) return '人物变成一个可爱的婴儿';
+    if (basename.includes('old') || basename.includes('lao')) return '人物变成一位老人';
+    if (basename.includes('girl') || basename.includes('nv')) return '人物变成一个可爱的女孩';
+    if (basename.includes('boy') || basename.includes('nan')) return '人物变成一个帅气的男孩';
+    // 默认：通用的搞怪场景
+    return '人物在一个搞笑夸张的场景中，做出有趣的表情和动作';
+}
+
+/**
+ * 将 SiliconFlow API 错误映射为友好的中文提示
+ */
+function mapSiliconflowError(err) {
+    const msg = err.message || '';
+    const status = err.response?.status;
+    const code = err.response?.data?.error?.code || err.response?.data?.code || '';
+    const apiMsg = err.response?.data?.error?.message || err.response?.data?.message || '';
+
+    // API Key 问题
+    if (msg.includes('未配置') || status === 401 || code.includes('Unauthorized') || code.includes('Authentication')) {
+        return 'SiliconFlow API Key 无效或未配置，请检查 .env 中的 SILICONFLOW_API_KEY';
+    }
+    // 额度不足
+    if (status === 402 || code.includes('PaymentRequired') || code.includes('InsufficientBalance') || apiMsg.includes('余额') || apiMsg.includes('额度')) {
+        return 'SiliconFlow 账户额度不足，请充值或检查免费额度是否用完';
+    }
+    // 限流
+    if (status === 429 || code.includes('Throttl') || code.includes('RateLimit')) {
+        return 'AI 服务调用过于频繁，请稍后重试';
+    }
+    // 模型不存在
+    if (status === 400 && (apiMsg.includes('model') || apiMsg.includes('Model'))) {
+        return `模型不存在或未开通：${config.ai.siliconflow.model}，请在 SiliconFlow 模型广场确认模型 ID`;
+    }
+    // 网络错误
+    if (msg.includes('timeout') || code === 'ETIMEDOUT') {
+        return 'AI 服务响应超时，请稍后重试';
+    }
+    if (msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET')) {
+        return '网络连接失败，请检查网络后重试';
+    }
+    return apiMsg || msg || '融合失败，请重试';
 }
 
 /**
