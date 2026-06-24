@@ -17,23 +17,26 @@ async function startGeneration() {
     $('#memeId').textContent = randomId();
     $('#threadId').textContent = '#' + randomId();
 
-    // 显示加载阶段
-    const stages = [
-        { text: '🔍 正在提取面部特征...', sub: 'SCANNING facial_landmarks...', progress: 20, time: 600 },
-        { text: '🧬 正在匹配基因序列...', sub: 'MATCHING meme_DNA_sequences...', progress: 45, time: 1200 },
-        { text: '✂️ 正在进行基因缝合...', sub: 'STITCHING chromosomes_together...', progress: 70, time: 1800 },
-        { text: '🎨 正在注入灵魂...', sub: 'INJECTing soul_essence_final...', progress: 90, time: 2500 },
-        { text: '✨ 即将完成！', sub: 'FINALIZING masterpiece...', progress: 100, time: 2900 },
-    ];
+    // 启动持续滚动的进度动画（AI 生成耗时 10-40 秒，不能用固定时间）
+    let progress = 5;
+    const progressTimer = setInterval(() => {
+        // 缓慢逼近 90%，永远不到 100%，等真实结果回来再填满
+        progress = progress + (90 - progress) * 0.08;
+        $('#progressFill').style.width = progress + '%';
+    }, 400);
 
-    stages.forEach((stage) => {
-        setTimeout(() => {
-            $('#loadingText').textContent = stage.text;
-            $('#loadingSubtext').textContent = stage.sub;
-            $('#progressFill').style.width = stage.progress + '%';
-            $('#threadId').textContent = '#' + randomId();
-        }, stage.time);
-    });
+    const stageTexts = [
+        '🔍 正在提取面部特征...', '🧬 正在匹配基因序列...',
+        '✂️ 正在进行基因缝合...', '🎨 正在注入灵魂...',
+        '⏳ AI 正在生成中，请稍候...', '✨ 正在渲染最终画面...',
+    ];
+    let stageIdx = 0;
+    const stageTimer = setInterval(() => {
+        $('#loadingText').textContent = stageTexts[stageIdx % stageTexts.length];
+        $('#loadingSubtext').textContent = 'PROCESSING... ' + Math.floor(progress) + '%';
+        $('#threadId').textContent = '#' + randomId();
+        stageIdx++;
+    }, 2000);
 
     try {
         // 准备表单数据
@@ -57,32 +60,54 @@ async function startGeneration() {
         formData.append('fusionType', state.fusionType);
         formData.append('style', state.style);
 
-        // 调用后端 API
+        // 调用后端 API（带 3 分钟超时，AI 生成耗时较长）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
         const apiResponse = await fetch('/api/fusion', {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
-        const result = await apiResponse.json();
+        // 防御性解析：先拿文本，再尝试 JSON 解析，避免 SyntaxError
+        const responseText = await apiResponse.text();
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch {
+            throw new Error('服务器返回了非预期的内容，请重试');
+        }
 
-        if (result.success) {
+        if (apiResponse.ok && result.success) {
             // 保存结果图片 URL
             state.resultImageUrl = result.resultUrl;
-            showResult();
+            // 进度填满后展示结果
+            clearInterval(progressTimer);
+            clearInterval(stageTimer);
+            $('#progressFill').style.width = '100%';
+            $('#loadingText').textContent = '✨ 生成完成！';
+            setTimeout(() => showResult(), 400);
         } else {
-            throw new Error(result.message || '生成失败');
+            throw new Error(result.message || `生成失败（HTTP ${apiResponse.status}）`);
         }
     } catch (error) {
+        clearInterval(progressTimer);
+        clearInterval(stageTimer);
         console.error('生成失败:', error);
         
         // 友好的错误提示
         let errorMsg = '生成失败，请重试';
-        if (error.message?.includes('timeout')) {
+        if (error.name === 'AbortError') {
+            errorMsg = 'AI 生成超时（超过 3 分钟），请稍后重试';
+        } else if (error.message?.includes('timeout')) {
             errorMsg = 'AI 服务响应超时，请稍后重试';
-        } else if (error.message?.includes('no face')) {
+        } else if (error.message?.includes('no face') || error.message?.includes('未在照片')) {
             errorMsg = '未在照片中发现人脸，请上传清晰的人脸照片';
-        } else if (error.message?.includes('network')) {
+        } else if (error.message?.includes('network') || error.message?.includes('Failed to fetch')) {
             errorMsg = '网络连接失败，请检查网络后重试';
+        } else if (error.message?.includes('非预期')) {
+            errorMsg = 'AI 服务响应异常，请稍后重试';
         } else if (error.message) {
             errorMsg = error.message;
         }
@@ -92,5 +117,6 @@ async function startGeneration() {
         // 恢复界面
         loading.classList.add('hidden');
         main.style.display = 'block';
+        $('#progressFill').style.width = '0%';
     }
 }
