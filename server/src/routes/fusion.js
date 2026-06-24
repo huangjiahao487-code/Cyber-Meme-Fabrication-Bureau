@@ -89,17 +89,8 @@ async function processFusion(req, res, photoPath, templatePath, fusionType, styl
         });
     } catch (err) {
         console.error('融合失败:', err);
-        
-        // 友好的错误提示
-        let errorMessage = '融合失败，请重试';
-        if (err.message?.includes('timeout')) {
-            errorMessage = 'AI 服务响应超时，请稍后重试';
-        } else if (err.message?.includes('no face')) {
-            errorMessage = '未在照片中发现人脸，请上传清晰的人脸照片';
-        } else if (err.message?.includes('network')) {
-            errorMessage = '网络连接失败，请检查网络后重试';
-        }
-        
+        // aiService 已将错误映射为友好的中文提示，直接使用
+        const errorMessage = err.message || '融合失败，请重试';
         res.status(500).json({ success: false, message: errorMessage });
     }
 }

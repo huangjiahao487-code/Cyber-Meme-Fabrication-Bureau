@@ -1,4 +1,5 @@
 // ========== 配置 ==========
+import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -17,10 +18,16 @@ export default {
         maxFileSize: 5 * 1024 * 1024, // 5MB
         allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     },
-    // AI API 配置（阶段一接入真实 API 时填充）
+    // AI API 配置
     ai: {
-        provider: process.env.AI_PROVIDER || 'mock', // mock | aliyun | tencent
-        apiKey: process.env.AI_API_KEY || '',
-        endpoint: process.env.AI_ENDPOINT || '',
+        // mock: 本地模拟 | aliyun: 阿里云人脸融合
+        provider: process.env.AI_PROVIDER || 'mock',
+        // 阿里云视觉智能开放平台配置
+        aliyun: {
+            accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
+            accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
+            // 人脸人体服务 endpoint（上海地域）
+            endpoint: process.env.ALIYUN_ENDPOINT || 'facebody.cn-shanghai.aliyuncs.com',
+        },
     },
 };
