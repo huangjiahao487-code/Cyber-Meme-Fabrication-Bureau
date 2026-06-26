@@ -42,6 +42,16 @@ export async function fuseImage(photoPath, templatePath, fusionType, style) {
     if (config.ai.provider === 'mock') {
         return mockFuse(photoPath, templatePath, fusionType, style);
     }
+    if (config.ai.provider === 'local') {
+        try {
+            return await localFuse(photoPath, templatePath, fusionType, style);
+        } catch (err) {
+            const friendly = mapLocalError(err);
+            const e = new Error(friendly);
+            e.original = err;
+            throw e;
+        }
+    }
     if (config.ai.provider === 'doubao') {
         try {
             return await doubaoFuse(photoPath, templatePath, fusionType, style);
@@ -271,6 +281,76 @@ function mapSiliconflowError(err) {
         return '网络连接失败，请检查网络后重试';
     }
     return apiMsg || msg || '融合失败，请重试';
+}
+
+// ========== 本地人脸融合服务（MediaPipe + OpenCV）==========
+// 调用 Python face_service，基于关键点检测 + 图像对齐做换脸
+// 完全免费、无需 API Key、无需 GPU，效果类似抖音静态特效
+
+/**
+ * 本地人脸融合：调用 Python face_service
+ * 返回 base64 data URI（避免文件路径暴露 + 方便前端直接显示）
+ */
+async function localFuse(photoPath, templatePath, fusionType, style) {
+    const { endpoint } = config.ai.local;
+    console.log(`[local] 开始融合: photo=${photoPath}, template=${templatePath}`);
+
+    // 把本地文件路径转成 data URI（Python 服务需要能读取，data URI 最通用）
+    const photoDataUri = await fileToImageContent(photoPath);
+    let templateDataUri;
+    if (isLocalFile(templatePath)) {
+        templateDataUri = await fileToImageContent(templatePath);
+    } else if (templatePath.startsWith('http')) {
+        templateDataUri = templatePath;
+    } else if (templatePath.startsWith('data:')) {
+        templateDataUri = templatePath;
+    } else {
+        throw new Error('模板图片路径无效');
+    }
+
+    // 调用 Python 服务，用 return_base64 模式直接拿 base64
+    const body = {
+        source: photoDataUri,
+        target: templateDataUri,
+        return_base64: true,
+    };
+
+    const response = await axios.post(`${endpoint}/fuse`, body, {
+        headers: { 'Content-Type': 'application/json' },
+        // 本地融合约 10 秒，给 60 秒余量
+        timeout: 60000,
+    });
+
+    const data = response.data;
+    if (!data.success) {
+        throw new Error(data.message || '本地融合失败');
+    }
+
+    console.log(`[local] 融合完成，返回 base64 图片`);
+    return data.image_base64;
+}
+
+/**
+ * 将本地融合服务错误映射为友好的中文提示
+ */
+function mapLocalError(err) {
+    const msg = err.message || '';
+    const code = err.code || '';
+
+    // 连接失败（Python 服务没启动）
+    if (code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED') || msg.includes('connect ECONNREFUSED')) {
+        return '本地人脸融合服务未启动，请在 server/face_service 目录下运行 python3 server.py';
+    }
+    // 超时
+    if (code === 'ETIMEDOUT' || msg.includes('timeout') || code === 'ECONNABORTED') {
+        return '人脸融合处理超时，请稍后重试';
+    }
+    // 无人脸
+    if (msg.includes('未在') && msg.includes('检测到人脸')) {
+        return msg;  // Python 服务已经返回友好消息，直接用
+    }
+    // 其他错误直接透传（Python 服务返回的消息已经是中文）
+    return msg || '融合失败，请重试';
 }
 
 /**

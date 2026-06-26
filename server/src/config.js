@@ -55,5 +55,11 @@ export default {
             model: process.env.SILICONFLOW_MODEL || 'Kwai-Kolors/Kolors',
             endpoint: process.env.SILICONFLOW_ENDPOINT || 'https://api.siliconflow.cn/v1/images/generations',
         },
+        // 本地人脸融合服务（provider=local 时使用）
+        // 基于 MediaPipe 关键点检测 + OpenCV 对齐融合，无需 API Key，完全免费
+        // 需要先启动 Python 服务：cd server/face_service && python3 server.py
+        local: {
+            endpoint: process.env.FACE_SERVICE_URL || 'http://localhost:5000',
+        },
     },
 };
