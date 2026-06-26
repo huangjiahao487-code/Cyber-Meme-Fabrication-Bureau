@@ -1,0 +1,123 @@
+/* ========== RESET & BASE ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --orange: #FF6B35;
+    --coral: #FF4757;
+    --golden: #FFD93D;
+    --peach: #FFF5EE;
+    --cream: #FFF8F0;
+    --warm-brown: #2D1B0E;
+    --warm-gray: #8B7355;
+    --light-peach: #FFE4D6;
+    --soft-orange: #FFF0E6;
+    --accent-lime: #A8E06C;
+}
+
+body {
+    font-family: 'Noto Sans SC', 'Fredoka', sans-serif;
+    background: var(--cream);
+    color: var(--warm-brown);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* ========== WARM BACKGROUND PATTERN ========== */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 10% 20%, rgba(255,107,53,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 90% 80%, rgba(255,71,87,0.05) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(255,217,61,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ========== FLOATING SHAPES ========== */
+.float-shape {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.08;
+    z-index: 0;
+}
+
+/* ========== SCROLLBAR ========== */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--cream); }
+::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 4px; }
+
+/* ========== HEADER TITLE ========== */
+.title-main {
+    font-family: 'Fredoka', 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--orange), var(--coral));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ========== SECTION LABEL ========== */
+.section-label {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--orange);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.section-label::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--light-peach), transparent);
+    border-radius: 1px;
+}
+
+/* ========== INPUT STYLES ========== */
+.warm-input {
+    background: white;
+    border: 2px solid var(--light-peach);
+    border-radius: 14px;
+    padding: 14px 18px;
+    color: var(--warm-brown);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 1rem;
+    transition: all 0.3s;
+    width: 100%;
+}
+.warm-input:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 4px rgba(255,107,53,0.1);
+}
+.warm-input::placeholder {
+    color: #c4a882;
+}
+
+/* ========== BADGE ========== */
+.warm-badge {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 5px 14px;
+    border-radius: 20px;
+}
+
+/* ========== MOBILE RESPONSIVE ========== */
+@media (max-width: 1024px) {
+    .main-grid {
+        grid-template-columns: 1fr !important;
+        gap: 24px !important;
+    }
+    .cta-btn {
+        width: 100%;
+        text-align: center;
+    }
+}

@@ -9,3 +9,14 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# 依赖
+node_modules/
+
+# 上传文件
+server/uploads/*
+!server/uploads/.gitkeep
+
+# 环境变量
+.env
+.env.local

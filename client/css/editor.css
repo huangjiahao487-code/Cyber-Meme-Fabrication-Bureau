@@ -1,0 +1,268 @@
+/* ========== 编辑器界面 ========== */
+.editor-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(255, 248, 240, 0.98);
+}
+
+.editor-container {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 248, 240, 0.98);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-header {
+    background: white;
+    border-bottom: 2px solid var(--light-peach);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editor-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--orange);
+}
+
+.editor-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.tool-btn {
+    padding: 10px 20px;
+    border: 2px solid var(--orange);
+    border-radius: 12px;
+    background: white;
+    color: var(--orange);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tool-btn:hover {
+    background: var(--orange);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.3);
+}
+
+.tool-btn.primary {
+    background: var(--orange);
+    color: white;
+}
+
+.tool-btn.primary:hover {
+    background: var(--coral);
+    border-color: var(--coral);
+}
+
+.tool-btn.hidden {
+    display: none;
+}
+
+.edit-btn {
+    font-family: 'Fredoka', 'Noto Sans SC', sans-serif;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 14px 28px;
+    border: 2px solid var(--coral);
+    border-radius: 14px;
+    background: rgba(255, 71, 87, 0.08);
+    color: var(--coral);
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 0.9rem;
+}
+
+.edit-btn:hover {
+    background: rgba(255, 71, 87, 0.15);
+    box-shadow: 0 6px 20px rgba(255, 71, 87, 0.2);
+    transform: translateY(-2px);
+}
+
+.editor-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    overflow: hidden;
+}
+
+.editor-tools {
+    background: white;
+    border-right: 2px solid var(--light-peach);
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.tool-section {
+    margin-bottom: 28px;
+}
+
+.tool-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--orange);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tool-button {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--light-peach);
+    border-radius: 12px;
+    background: white;
+    color: var(--warm-brown);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tool-button:hover {
+    border-color: var(--orange);
+    background: var(--soft-orange);
+}
+
+.tool-button.active {
+    border-color: var(--coral);
+    background: rgba(255, 71, 87, 0.1);
+    color: var(--coral);
+}
+
+.tool-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--light-peach);
+    border-radius: 12px;
+    background: white;
+    color: var(--warm-brown);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tool-select:hover {
+    border-color: var(--orange);
+}
+
+.tool-select:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.text-input-group {
+    margin-bottom: 16px;
+}
+
+.text-input-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--warm-gray);
+    margin-bottom: 8px;
+}
+
+.text-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--light-peach);
+    border-radius: 12px;
+    font-size: 1rem;
+    color: var(--warm-brown);
+    transition: all 0.3s;
+}
+
+.text-input:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.color-picker-group {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.color-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 3px solid var(--light-peach);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+    border-color: var(--orange);
+}
+
+.color-swatch.active {
+    border-color: var(--coral);
+    box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.2);
+}
+
+.editor-canvas-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: repeating-conic-gradient(#f5f5f5 0% 25%, white 0% 50%) 50% / 20px 20px;
+    overflow: auto;
+}
+
+.canvas-wrapper {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.editor-footer {
+    background: white;
+    border-top: 2px solid var(--light-peach);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editor-hint {
+    font-size: 0.9rem;
+    color: var(--warm-gray);
+}
+
+.editor-footer-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+    .editor-main {
+        grid-template-columns: 1fr;
+    }
+
+    .editor-tools {
+        border-right: none;
+        border-bottom: 2px solid var(--light-peach);
+        max-height: 300px;
+    }
+}
