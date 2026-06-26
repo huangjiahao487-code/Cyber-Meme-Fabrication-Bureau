@@ -153,6 +153,8 @@ def align_face(source_img: np.ndarray, source_face: dict,
 
     # 计算缩放比例（让源人脸眼睛间距匹配目标）
     scale = t_eye_dist / s_eye_dist if s_eye_dist > 0 else 1.0
+    # 缩小人脸比例，让人脸"融入"底板而非"遮住"底板（0.78 = 比目标脸小 22%）
+    scale = scale * 0.78
 
     # 计算旋转角度差
     angle_diff = t_angle - s_angle
@@ -203,44 +205,44 @@ def color_transfer(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -> 
 
 
 def seamless_blend(source: np.ndarray, source_mask: np.ndarray,
-                   target: np.ndarray, target_face: dict) -> np.ndarray:
-    """无缝融合：用 seamlessClone 做边缘自然过渡"""
+                   target: np.ndarray, target_face: dict,
+                   blend_strength: float = 0.62) -> np.ndarray:
+    """
+    混合融合：用 alpha 混合让人脸"融入"底板，而非"遮住"底板。
+
+    seamlessClone（泊松融合）会完全替换目标区域，导致底板被遮住。
+    改为 alpha 混合：source 权重 blend_strength，底板透出 (1 - blend_strength)，
+    让底板的色调/纹理从人脸区域透出来，达到"融入"效果。
+
+    :param blend_strength: source 的权重，1.0=完全覆盖底板，0.62=底板透出 38%
+    """
     h, w = target.shape[:2]
-
-    # 找到 mask 的中心点（seamlessClone 需要中心坐标）
-    contours, _ = cv2.findContours(source_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return target
-
-    # 取最大的轮廓
-    largest = max(contours, key=cv2.contourArea)
-    M = cv2.moments(largest)
-    if M['m00'] == 0:
-        return target
-    cx = int(M['m10'] / M['m00'])
-    cy = int(M['m01'] / M['m00'])
 
     # 确保 mask 是单通道
     if len(source_mask.shape) == 3:
         source_mask = cv2.cvtColor(source_mask, cv2.COLOR_BGR2GRAY)
+
     # 二值化
-    _, source_mask = cv2.threshold(source_mask, 10, 255, cv2.THRESH_BINARY)
+    _, mask_bin = cv2.threshold(source_mask, 10, 255, cv2.THRESH_BINARY)
 
-    # 检查中心点是否在图像范围内
-    cx = max(1, min(w - 2, cx))
-    cy = max(1, min(h - 2, cy))
+    # 检查 mask 是否为空
+    if mask_bin.sum() == 0:
+        return target
 
-    try:
-        result = cv2.seamlessClone(source, target, source_mask, (cx, cy), cv2.NORMAL_CLONE)
-        return result
-    except cv2.error:
-        # seamlessClone 失败时退回到 alpha 混合
-        print('[face_fusion] seamlessClone 失败，退回 alpha 混合', file=sys.stderr)
-        mask_f = source_mask.astype(np.float32) / 255.0
-        mask_f = cv2.GaussianBlur(mask_f, (31, 31), 0)
-        mask_f = mask_f[:, :, np.newaxis]
-        result = (source * mask_f + target * (1 - mask_f)).astype(np.uint8)
-        return result
+    # 边缘羽化（让过渡更自然，避免硬边）
+    mask_blur = cv2.GaussianBlur(mask_bin, (51, 51), 0)
+
+    # 转 float 归一化到 0-1
+    mask_f = mask_blur.astype(np.float32) / 255.0
+    # 控制 source 的权重，让人脸"融入"底板，底板特征透出来
+    mask_f = mask_f * blend_strength
+    mask_f = mask_f[:, :, np.newaxis]
+
+    # alpha 混合：result = source * mask + target * (1 - mask)
+    source_f = source.astype(np.float32)
+    target_f = target.astype(np.float32)
+    result = (source_f * mask_f + target_f * (1.0 - mask_f)).astype(np.uint8)
+    return result
 
 
 def fuse_faces(source_path: str, target_path: str, output_path: str) -> dict:
